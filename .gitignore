@@ -3,3 +3,4 @@ lib
 share
 include
 local
+*.pyc
