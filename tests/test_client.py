@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 
+import pytest
+import time
+
 from adhs.client import AdhsClient
-from adhs.server import AdhsServer
+from adhs.server import AdhsServer, ServerThread
 
 class TestServer(object):
     def test_start_one_server(self):
-        server = AdhsServer()
-        assert len(server.connected_servers()) == 0
+        server = AdhsServer('ipc://tmp.sock')
+        assert len(server.known_hashes()) == 0
 
+    @pytest.mark.xfail
     def test_start_three_servers(self):
-        server_addresses = ['icp://server1.sock', 'icp://server2.sock', 'icp://server3.sock']
+        server_addresses = ['ipc://server1.sock', 'ipc://server2.sock', 'ipc://server3.sock']
         servers = []
         for s_addr in server_addresses:
             s = AdhsServer(s_addr)
@@ -19,9 +23,18 @@ class TestServer(object):
         for s in servers:
             assert len(s.connected_servers()) == 2
 
-    def test_known_hashes(self):
-        server = AdhsServer()
-        assert server.known_hashes() == []
+
+@pytest.yield_fixture
+def adhsserver():
+    t = ServerThread(data_socket='ipc://testserver.sock')
+    t.start()
+    while not t.is_alive():
+        time.sleep(0.01)
+    while t.server == None:
+        time.sleep(0.01)
+    yield t.server
+    t.stop()
+    t.join()
 
 
 class TestClient(object):
@@ -30,8 +43,28 @@ class TestClient(object):
         c = AdhsClient()
         assert len(c.active_servers()) == 0
 
-    def test_start_one_server(self):
-        AdhsServer()
-
+    def test_start_one_server(self, adhsserver):
         c = AdhsClient()
+        c.connectToServer('ipc://testserver.sock')
         assert len(c.active_servers()) == 1
+        assert len(adhsserver.known_hashes()) == 0
+
+    def test_get_not_existing_value(self, adhsserver):
+        c = AdhsClient()
+        c.connectToServer('ipc://testserver.sock')
+        with pytest.raises(KeyError):
+            c.get('/bla')
+
+    #@pytest.mark.xfail
+    def test_save_one_value(self, adhsserver):
+        c = AdhsClient()
+        c.connectToServer('ipc://testserver.sock')
+        c.save('/bla', 'BLUB BLOB')
+        assert len(adhsserver.known_hashes()) == 1
+
+    #@pytest.mark.xfail
+    def test_save_and_get_one_value(self, adhsserver):
+        c = AdhsClient()
+        c.connectToServer('ipc://testserver.sock')
+        c.save('/bla', 'BLUB BLOB')
+        assert c.get('/bla') == 'BLUB BLOB'
