@@ -44,3 +44,19 @@ class AdhsClient(object):
             'Status %s for saving key %s with value \'%s\'',
             status, key, value
         )
+
+    def has_key(self, key):
+        if len(self._active_servers) > 0:
+            self.requester.send_multipart(['EXISTS', key])
+            msg = self.requester.recv_multipart()
+            if msg[0] == 'OK':
+                return True
+        return False
+
+    def delete(self, key):
+        if len(self._active_servers) > 0:
+            self.requester.send_multipart(['DELETE', key])
+            msg = self.requester.recv_multipart()
+            if msg[0] == 'OK':
+                return True
+        return False

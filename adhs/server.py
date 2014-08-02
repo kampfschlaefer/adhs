@@ -17,19 +17,42 @@ class AdhsServer(object):
 
         self._data = {}
 
+        self._actions = {
+            'EXISTS': self.process_exists,
+            'GET': self.process_get,
+            'SAVE': self.process_save,
+            'DELETE': self.process_delete,
+        }
+
+    def process_exists(self, key):
+        if key in self._data:
+            return ['OK']
+        return ['KeyError']
+
+    def process_get(self, key):
+        if key in self._data:
+            return ['OK', key, self._data[key]]
+        return ['KeyError']
+
+    def process_save(self, key, value):
+        self._data[key] = value
+        return ['OK', key, value]
+
+    def process_delete(self, key):
+        if key in self._data:
+            del self._data[key]
+            return ['OK']
+        return ['KeyError']
+
     def process(self):
         try:
             msg = self.replier.recv_multipart()
             self.logger.debug("Received msg %s", msg)
-            if msg[0] == 'SAVE':
-                self._data[msg[1]] = msg[2]
-                self.replier.send_multipart(['OK'] + msg[1:])
-            if msg[0] == 'GET':
-                try:
-                    val = self._data[msg[1]]
-                    self.replier.send_multipart(['OK', msg[1], val])
-                except KeyError:
-                    self.replier.send_multipart(['KeyError'])
+            if msg[0] in self._actions:
+                ret = self._actions[msg[0]](*msg[1:])
+                self.replier.send_multipart(ret)
+            else:
+                self.replier.send_multipart(['INVALID COMMAND'])
         except zmq.ZMQError:
             ''' timeout on receiving '''
             pass

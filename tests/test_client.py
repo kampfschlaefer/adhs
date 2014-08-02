@@ -55,6 +55,18 @@ class TestClient(object):
         with pytest.raises(KeyError):
             c.get('/bla')
 
+    def test_search_non_existing_key(self, adhsserver):
+        c = AdhsClient()
+        c.connectToServer('ipc://testserver.sock')
+        assert c.has_key('/bla') == False
+
+    def test_search_existing_key(self, adhsserver):
+        c = AdhsClient()
+        c.connectToServer('ipc://testserver.sock')
+        c.save('/bla', 'BLUB')
+        assert c.has_key('/bla') == True
+        assert c.has_key('/blub') == False
+
     #@pytest.mark.xfail
     def test_save_one_value(self, adhsserver):
         c = AdhsClient()
@@ -68,3 +80,11 @@ class TestClient(object):
         c.connectToServer('ipc://testserver.sock')
         c.save('/bla', 'BLUB BLOB')
         assert c.get('/bla') == 'BLUB BLOB'
+
+    def test_save_and_delete_one_value(self, adhsserver):
+        c = AdhsClient()
+        c.connectToServer('ipc://testserver.sock')
+        c.save('/bla', 'BLUB')
+        assert c.get('/bla') == 'BLUB'
+        c.delete('/bla')
+        assert c.has_key('/bla') == False
