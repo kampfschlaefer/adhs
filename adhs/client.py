@@ -12,8 +12,8 @@ class AdhsClient(object):
 
         self.context = zmq.Context()
         self.requester = self.context.socket(zmq.REQ)
-        self.requester.set(zmq.RCVTIMEO, 100)
-        self.requester.set(zmq.SNDTIMEO, 100)
+        self.requester.set(zmq.RCVTIMEO, 250)
+        self.requester.set(zmq.SNDTIMEO, 1000)
         self.requester.set(zmq.IMMEDIATE, 1)
 
     def connectToServer(self, server='tcp://localhost:14005'):
@@ -30,7 +30,6 @@ class AdhsClient(object):
             raise KeyError
         self.requester.send_multipart(['GET', key])
         msg = self.requester.recv_multipart()
-        print "received answer %s" % msg
         if msg[0] != 'OK':
             raise KeyError
         return msg[2]
