@@ -122,7 +122,26 @@ class TestTwoServers(object):
 
         server1.process_save('/bla', 'BLUB')
 
-        self.loopservers(2, twoservers)
+        self.loopservers(1, twoservers)
 
         assert len(server1.known_hashes()) == 1
         assert len(server2.known_hashes()) == 1
+
+        assert server1._data == server2._data
+
+    def test_two_servers_thousand_items(self, twoservers, testdata_thousand):
+        data, hashes = testdata_thousand
+        server1, server2 = twoservers
+
+        self.loopservers(2, twoservers)
+
+        for key, value in data:
+            server1.process_save(key, value)
+
+        self.loopservers(5, twoservers)
+
+        assert server1.known_hashes() == hashes
+        assert server2.known_hashes() == hashes
+
+        assert server1._data == dict(data)
+        assert server2._data == dict(data)

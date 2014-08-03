@@ -50,13 +50,19 @@ class AdhsServer(object):
         return ['KeyError']
 
     def process_get(self, key):
+        if hash(key) not in self._known_hashes:
+            return ['KeyError']
+
         if key in self._data:
             return ['OK', key, self._data[key]]
-        return ['KeyError']
+
+        # TODO: Fetch from other servers
+        return ['NotFound']
 
     def process_save(self, key, value):
         self._known_hashes.add(hash(key))
         self._data[key] = value
+        #self.publisher.send_multipart(['SAVE', key, value])
         return ['OK', key, value]
 
     def process_delete(self, key):
@@ -70,7 +76,7 @@ class AdhsServer(object):
         now = time.time()
         if now - self._last_heartbeat > 1:
             #print '%s will send heartbeat' % self._pub_socket
-            self.publisher.send_multipart(['PING', self._pub_socket, ','.join([str(h) for h in self._known_hashes])])
+            self.publisher.send_multipart(['PING', self._pub_socket] + [str(h) for h in self._known_hashes])
             self._last_heartbeat = now
 
         events = self.poller.poll(timeout=1)
@@ -91,9 +97,29 @@ class AdhsServer(object):
                     if msg[1] not in self._known_servers:
                         self._known_servers[msg[1]] = {}
                     self._known_servers[msg[1]]['last_seen'] = time.time()
-                    remote_hashes = set(filter(lambda s: s != '', msg[2].split(',')))
+                    remote_hashes = set(
+                        [ int(s) for s in msg[2:] ]
+                    )
                     if remote_hashes != self._known_hashes:
-                        print "Remotes hashes are different from my own!\n remote: %s\n my own: %s" % (remote_hashes, self._known_hashes)
+                        self.logger.debug(
+                            'Remotes hashes are different from my own! remote has %s hashes, I have %s.',
+                            len(remote_hashes), len(self._known_hashes)
+                        )
+                        request_hashes = [ str(h) for h in remote_hashes.difference(self._known_hashes)]
+                        while len(request_hashes):
+                            ## Limit the number of hashes requested at a time to 100 for now
+                            self.publisher.send_multipart(['SENDHASHES'] + request_hashes[:100])
+                            del request_hashes[:100]
+                if msg[0] == 'SAVE':
+                    key, value = msg[1:]
+                    self._data[key] = value
+                    self._known_hashes.add(hash(key))
+                if msg[0] == 'SENDHASHES':
+                    for h in msg[1:]:
+                        #print "Should send hash %i" % int(h)
+                        for key, value in self._data.iteritems():
+                            if hash(key) == int(h):
+                                self.publisher.send_multipart(['SAVE', key, value])
 
     def subscribeto(self, servers):
         if not isinstance(servers, list):
@@ -103,6 +129,8 @@ class AdhsServer(object):
                 #print 'subscribing to %s' % server
                 socket = self.context.socket(zmq.SUB)
                 socket.set(zmq.SUBSCRIBE, 'PING')
+                socket.set(zmq.SUBSCRIBE, 'SAVE')
+                socket.set(zmq.SUBSCRIBE, 'SENDHASHES')
                 socket.connect(server)
                 self.poller.register(socket, zmq.POLLIN)
                 self._subscriptions.append(socket)
