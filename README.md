@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/kampfschlaefer/adhs.svg?branch=master)](https://travis-ci.org/kampfschlaefer/adhs)
+
 # Arnolds Decentralized Hyperresilent Storage
 
 I started writing a little decentralized, self-healing key-value store. Just for the fun of it.
