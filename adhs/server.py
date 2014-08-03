@@ -62,7 +62,7 @@ class AdhsServer(object):
     def process_save(self, key, value):
         self._known_hashes.add(hash(key))
         self._data[key] = value
-        #self.publisher.send_multipart(['SAVE', key, value])
+        self.publisher.send_multipart(['SAVE', key, value])
         return ['OK', key, value]
 
     def process_delete(self, key):
