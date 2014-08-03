@@ -11,6 +11,7 @@ class AdhsServer(object):
         self.logger = logging.getLogger(self.__class__.__name__)
 
         self.context = zmq.Context()
+
         self.replier = self.context.socket(zmq.REP)
         self.replier.bind(data_socket)
         self._data_socket = data_socket
@@ -20,10 +21,13 @@ class AdhsServer(object):
         self._pub_socket = pub_socket
         self._last_heartbeat = 0
 
+        self._subscriptions = []
+
         self.poller = zmq.Poller()
         self.poller.register(self.replier, zmq.POLLIN)
 
         self._data = {}
+        self._known_hashes = set()
         self._known_servers = {} # map of address: {'last_seen': time,}
 
         self._actions = {
@@ -32,6 +36,13 @@ class AdhsServer(object):
             'SAVE': self.process_save,
             'DELETE': self.process_delete,
         }
+
+    def stop(self):
+        for s in self._subscriptions:
+            s.close()
+        self.publisher.close()
+        self.replier.close()
+        self.context.term()
 
     def process_exists(self, key):
         if key in self._data:
@@ -44,12 +55,14 @@ class AdhsServer(object):
         return ['KeyError']
 
     def process_save(self, key, value):
+        self._known_hashes.add(hash(key))
         self._data[key] = value
         return ['OK', key, value]
 
     def process_delete(self, key):
-        if key in self._data:
+        if key in self._data and hash(key) in self._known_hashes:
             del self._data[key]
+            self._known_hashes.remove(hash(key))
             return ['OK']
         return ['KeyError']
 
@@ -57,7 +70,7 @@ class AdhsServer(object):
         now = time.time()
         if now - self._last_heartbeat > 1:
             #print '%s will send heartbeat' % self._pub_socket
-            self.publisher.send_multipart(['PING', self._pub_socket])
+            self.publisher.send_multipart(['PING', self._pub_socket, ','.join([str(h) for h in self._known_hashes])])
             self._last_heartbeat = now
 
         events = self.poller.poll(timeout=1)
@@ -78,6 +91,9 @@ class AdhsServer(object):
                     if msg[1] not in self._known_servers:
                         self._known_servers[msg[1]] = {}
                     self._known_servers[msg[1]]['last_seen'] = time.time()
+                    remote_hashes = set(filter(lambda s: s != '', msg[2].split(',')))
+                    if remote_hashes != self._known_hashes:
+                        print "Remotes hashes are different from my own!\n remote: %s\n my own: %s" % (remote_hashes, self._known_hashes)
 
     def subscribeto(self, servers):
         if not isinstance(servers, list):
@@ -89,12 +105,13 @@ class AdhsServer(object):
                 socket.set(zmq.SUBSCRIBE, 'PING')
                 socket.connect(server)
                 self.poller.register(socket, zmq.POLLIN)
+                self._subscriptions.append(socket)
 
     def known_servers(self):
         return self._known_servers
 
     def known_hashes(self):
-        return self._data.keys()
+        return self._known_hashes
 
 
 class ServerThread(threading.Thread):
@@ -114,5 +131,7 @@ class ServerThread(threading.Thread):
 
         while not self._stop:
             self.server.process()
+
+        self.server.stop()
 
         logger.info('Stopped thread')

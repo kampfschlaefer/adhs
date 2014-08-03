@@ -4,36 +4,7 @@ import pytest
 import time
 
 from adhs.client import AdhsClient
-from adhs.server import AdhsServer, ServerThread
-
-class TestServer(object):
-    def test_start_one_server(self):
-        server = AdhsServer() #'ipc://tmp.sock')
-        assert len(server.known_hashes()) == 0
-        assert len(server.known_servers()) == 0
-
-    #@pytest.mark.xfail
-    def test_start_two_servers(self):
-        server_addresses = [
-            ('ipc://server1.data_sock', 'ipc://server1.pub_sock'),
-            ('ipc://server1.data_sock', 'ipc://server2.pub_sock')
-        ]
-        servers = []
-        for data_s, pub_s in server_addresses:
-            s = AdhsServer(data_s, pub_s)
-            s.subscribeto([ server[1] for server in server_addresses])
-            servers.append(s)
-
-        start = time.time()
-        while time.time() - start < 5:
-            for s in servers:
-                s.process()
-            #print '.'
-            #time.sleep(0.1)
-
-        for s in servers:
-            assert len(s.known_servers()) == 1
-
+from adhs.server import ServerThread
 
 @pytest.yield_fixture
 def adhsserver():
