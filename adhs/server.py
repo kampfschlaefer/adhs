@@ -115,10 +115,10 @@ class AdhsServer(object):
                     self._data[key] = value
                     self._known_hashes.add(hash(key))
                 if msg[0] == 'SENDHASHES':
-                    for h in msg[1:]:
+                    for h in [int(s) for s in msg[1:]]:
                         #print "Should send hash %i" % int(h)
                         for key, value in self._data.iteritems():
-                            if hash(key) == int(h):
+                            if hash(key) == h:
                                 self.publisher.send_multipart(['SAVE', key, value])
 
     def subscribeto(self, servers):
