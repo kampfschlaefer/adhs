@@ -138,7 +138,7 @@ class TestTwoServers(object):
         for key, value in data:
             server1.process_save(key, value)
 
-        self.loopservers(5, twoservers)
+        self.loopservers(2, twoservers)
 
         assert server1.known_hashes() == hashes
         assert server2.known_hashes() == hashes
