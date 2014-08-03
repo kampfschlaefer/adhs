@@ -145,19 +145,19 @@ class AdhsServer(object):
 class ServerThread(threading.Thread):
     def __init__(self, *args, **kwargs):
         super(ServerThread, self).__init__()
-        self._stop = False
+        self._mystop = False
         self.server = None
         self._args = (args, kwargs)
 
     def stop(self):
-        self._stop = True
+        self._mystop = True
 
     def run(self):
         logger = logging.getLogger('ServerThread')
         logger.info('starting thread')
         self.server = AdhsServer(*self._args[0], **self._args[1])
 
-        while not self._stop:
+        while not self._mystop:
             self.server.process()
 
         self.server.stop()
