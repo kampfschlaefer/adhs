@@ -55,7 +55,7 @@ class AdhsServer(object):
         return keyhash % len(self._known_servers) in self.mysegments()
 
     def process_exists(self, key):
-        if key in self._data:
+        if hash(key) in self._data:
             return ['OK']
         return ['KeyError']
 
