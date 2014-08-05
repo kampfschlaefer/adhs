@@ -28,7 +28,7 @@ class AdhsServer(object):
 
         self._data = {}
         self._known_hashes = set()
-        self._known_servers = {} # map of address: {'last_seen': time,}
+        self._known_servers = {self._pub_socket: {'last_seen': time.time()},}
 
         self._actions = {
             'EXISTS': self.process_exists,
@@ -43,6 +43,16 @@ class AdhsServer(object):
         self.publisher.close()
         self.replier.close()
         self.context.term()
+
+    def mysegments(self):
+        myid = self._known_servers.keys().index(self._pub_socket)
+        #print 'I am {} of {}'.format(myid, len(self._known_servers))
+        mysegments = [ i%len(self._known_servers) for i in xrange(myid, myid+3)]
+        #print ' I will be responsible for segments %s' % mysegments
+        return mysegments
+
+    def inmysegments(self, keyhash):
+        return keyhash % len(self._known_servers) in self.mysegments()
 
     def process_exists(self, key):
         if key in self._data:
@@ -62,9 +72,18 @@ class AdhsServer(object):
 
     def process_save(self, key, value):
         keyhash = hash(key)
+        ## store the known hash
         self._known_hashes.add(keyhash)
-        self._data[keyhash] = value
+        ## if its in one of our segments, store in our data
+        print "Storing {} (hash: {})? segment {} in our segments {}?".format(
+            key, keyhash, keyhash % len(self._known_servers), self.mysegments()
+        )
+        if self.inmysegments(keyhash):
+            print "Saving with me!"
+            self._data[keyhash] = value
+        ## publis the save in every case
         self.publisher.send_multipart(['SAVE', str(keyhash), value])
+        ## return a positive
         return ['OK', key, value]
 
     def process_delete(self, key):
@@ -85,6 +104,7 @@ class AdhsServer(object):
         events = self.poller.poll(timeout=1)
         for socket, event in events:
             #print 'Received something on socket %s' % socket.fd
+
             if socket == self.replier:
                 msg = self.replier.recv_multipart()
                 self.logger.debug("Received msg %s", msg)
@@ -93,6 +113,7 @@ class AdhsServer(object):
                     self.replier.send_multipart(ret)
                 else:
                     self.replier.send_multipart(['INVALID COMMAND'])
+
             else: # Has to be one of the subscribers
                 msg = socket.recv_multipart()
                 if msg[0] == 'PING':
@@ -100,6 +121,7 @@ class AdhsServer(object):
                     if msg[1] not in self._known_servers:
                         self._known_servers[msg[1]] = {}
                     self._known_servers[msg[1]]['last_seen'] = time.time()
+
                     remote_hashes = set(
                         [ int(s) for s in msg[2:] ]
                     )
@@ -115,7 +137,8 @@ class AdhsServer(object):
                             del request_hashes[:100]
                 if msg[0] == 'SAVE':
                     keyhash, value = msg[1:]
-                    self._data[int(keyhash)] = value
+                    if self.inmysegments(int(keyhash)):
+                        self._data[int(keyhash)] = value
                     self._known_hashes.add(int(keyhash))
                 if msg[0] == 'SENDHASHES':
                     for h in msg[1:]:
