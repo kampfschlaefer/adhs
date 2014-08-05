@@ -15,8 +15,10 @@ def oneserver():
 class TestOneServer(object):
     def test_start_one_server(self, oneserver):
         server = oneserver
+        ## no key-values stored so far
         assert len(server.known_hashes()) == 0
-        assert len(server.known_servers()) == 0
+        ## one known server: the server itself!
+        assert len(server.known_servers()) == 1
 
     def test_check_one_element(self, oneserver):
         server = oneserver
@@ -77,7 +79,7 @@ class TestTwoServers(object):
         self.loopservers(2, twoservers)
 
         for s in twoservers:
-            assert len(s.known_servers()) == 1
+            assert len(s.known_servers()) == 2
 
     def test_two_servers_one_item(self, twoservers):
         server1, server2 = twoservers
