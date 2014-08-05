@@ -143,5 +143,5 @@ class TestTwoServers(object):
         assert server1.known_hashes() == hashes
         assert server2.known_hashes() == hashes
 
-        assert server1._data == dict(data)
-        assert server2._data == dict(data)
+        assert server1._data == { hash(k): v for k,v in data }
+        assert server2._data == { hash(k): v for k,v in data }

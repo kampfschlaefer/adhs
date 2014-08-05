@@ -50,25 +50,28 @@ class AdhsServer(object):
         return ['KeyError']
 
     def process_get(self, key):
-        if hash(key) not in self._known_hashes:
+        keyhash = hash(key)
+        if keyhash not in self._known_hashes:
             return ['KeyError']
 
-        if key in self._data:
-            return ['OK', key, self._data[key]]
+        if keyhash in self._data:
+            return ['OK', key, self._data[keyhash]]
 
         # TODO: Fetch from other servers
         return ['NotFound']
 
     def process_save(self, key, value):
-        self._known_hashes.add(hash(key))
-        self._data[key] = value
-        self.publisher.send_multipart(['SAVE', key, value])
+        keyhash = hash(key)
+        self._known_hashes.add(keyhash)
+        self._data[keyhash] = value
+        self.publisher.send_multipart(['SAVE', str(keyhash), value])
         return ['OK', key, value]
 
     def process_delete(self, key):
-        if key in self._data and hash(key) in self._known_hashes:
-            del self._data[key]
-            self._known_hashes.remove(hash(key))
+        keyhash = hash(key)
+        if keyhash in self._data and keyhash in self._known_hashes:
+            del self._data[keyhash]
+            self._known_hashes.remove(keyhash)
             return ['OK']
         return ['KeyError']
 
@@ -111,15 +114,14 @@ class AdhsServer(object):
                             self.publisher.send_multipart(['SENDHASHES'] + request_hashes[:100])
                             del request_hashes[:100]
                 if msg[0] == 'SAVE':
-                    key, value = msg[1:]
-                    self._data[key] = value
-                    self._known_hashes.add(hash(key))
+                    keyhash, value = msg[1:]
+                    self._data[int(keyhash)] = value
+                    self._known_hashes.add(int(keyhash))
                 if msg[0] == 'SENDHASHES':
-                    for h in [int(s) for s in msg[1:]]:
-                        #print "Should send hash %i" % int(h)
-                        for key, value in self._data.iteritems():
-                            if hash(key) == h:
-                                self.publisher.send_multipart(['SAVE', key, value])
+                    for h in msg[1:]:
+                        self.logger.debug("Should send hash %s", h)
+                        if int(h) in self._data:
+                            self.publisher.send_multipart(['SAVE', h, self._data(int(h))])
 
     def subscribeto(self, servers):
         if not isinstance(servers, list):
